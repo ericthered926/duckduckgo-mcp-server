@@ -2,13 +2,15 @@
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides DuckDuckGo search functionality for AI assistants.
 
+[![npm version](https://img.shields.io/npm/v/@ericthered926/duckduckgo-mcp-server.svg)](https://www.npmjs.com/package/@ericthered926/duckduckgo-mcp-server)
+
 > **Attribution**: This project is a fork of [zhsama/duckduckgo-mcp-server](https://github.com/zhsama/duckduckgo-mcp-server), originally created by [zhsama](https://github.com/zhsama). This fork adds English localization, news search, region support, time filtering, and modern tooling.
 
 ## Features
 
 - **Web Search** - Search the web with region-specific and time-filtered results
 - **News Search** - Search recent news articles with source and date information
-- **Token Optimization** - Configurable result limits and snippet truncation for low-VRAM LLMs
+- **Token Optimization** - Configurable result limits, snippet truncation, and formatting for low-VRAM LLMs
 - **SafeSearch** - Content filtering (strict, moderate, off)
 - **Region Support** - Localized results for different countries
 - **Time Filtering** - Filter results by day, week, month, year
@@ -108,6 +110,8 @@ Other region codes following the `xx-xx` format may also work.
 | `DDG_MAX_RESULTS`         | 3       | Default number of results returned              |
 | `DDG_MAX_SNIPPET_LENGTH`  | 150     | Max characters per snippet (truncated with ...) |
 | `DDG_ENABLE_FULL_CONTENT` | false   | Set to "true" to disable truncation             |
+| `DDG_STRIP_EMOJI`         | false   | Set to "true" to remove emojis from titles/text |
+| `DDG_OUTPUT_FORMAT`       | "dense" | options: "dense", "json", "minimal"             |
 
 #### Rate Limiting
 

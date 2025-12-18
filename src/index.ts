@@ -16,6 +16,8 @@ const EnvConfigSchema = z.object({
     (v) => v === "true" || v === "1",
     z.boolean().default(false)
   ),
+  DDG_STRIP_EMOJI: z.preprocess((v) => v === "true" || v === "1", z.boolean().default(false)),
+  DDG_OUTPUT_FORMAT: z.enum(["dense", "json", "minimal"]).default("dense"),
 });
 
 const envConfig = EnvConfigSchema.parse(process.env);
@@ -98,6 +100,8 @@ const CONFIG = {
     defaultResults: envConfig.DDG_MAX_RESULTS,
     maxSnippetLength: envConfig.DDG_MAX_SNIPPET_LENGTH,
     enableFullContent: envConfig.DDG_ENABLE_FULL_CONTENT,
+    stripEmoji: envConfig.DDG_STRIP_EMOJI,
+    outputFormat: envConfig.DDG_OUTPUT_FORMAT,
     defaultSafeSearch: "moderate" as const,
     defaultRegion: "wt-wt", // Worldwide
   },
@@ -175,6 +179,17 @@ function cleanUrl(url: string): string {
   } catch {
     return url; // Return original if parsing fails
   }
+}
+
+/**
+ * Removes emojis from text.
+ */
+function stripEmojis(text: string): string {
+  // Regex for matching emojis
+  return text.replace(
+    /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
+    ""
+  );
 }
 
 // ============================================================================
@@ -481,7 +496,7 @@ async function performWebSearch(args: WebSearchArgs): Promise<string> {
   }
 
   const results: WebSearchResult[] = searchResults.results.slice(0, effectiveLimit).map((r) => ({
-    title: r.title,
+    title: CONFIG.search.stripEmoji ? stripEmojis(r.title) : r.title,
     description: CONFIG.search.enableFullContent
       ? r.description || r.title
       : truncateSnippet(r.description || r.title, CONFIG.search.maxSnippetLength),
@@ -489,7 +504,21 @@ async function performWebSearch(args: WebSearchArgs): Promise<string> {
     hostname: r.hostname,
   }));
 
+  if (CONFIG.search.stripEmoji) {
+    results.forEach((r) => {
+      r.description = stripEmojis(r.description);
+    });
+  }
+
   log("info", `Found ${results.length} web results for: "${query}"`);
+
+  if (CONFIG.search.outputFormat === "json") {
+    return JSON.stringify(results);
+  }
+
+  if (CONFIG.search.outputFormat === "minimal") {
+    return results.map((r) => `${r.title}: ${r.url}`).join("\n");
+  }
 
   // Dense single-line format for token efficiency
   const formattedResults = results
@@ -521,7 +550,7 @@ async function performNewsSearch(args: NewsSearchArgs): Promise<string> {
   }
 
   const results: NewsSearchResult[] = searchResults.results.slice(0, effectiveLimit).map((r) => ({
-    title: r.title,
+    title: CONFIG.search.stripEmoji ? stripEmojis(r.title) : r.title,
     excerpt: CONFIG.search.enableFullContent
       ? r.excerpt
       : truncateSnippet(r.excerpt, CONFIG.search.maxSnippetLength),
@@ -531,7 +560,21 @@ async function performNewsSearch(args: NewsSearchArgs): Promise<string> {
     relativeTime: r.relativeTime,
   }));
 
+  if (CONFIG.search.stripEmoji) {
+    results.forEach((r) => {
+      r.excerpt = stripEmojis(r.excerpt);
+    });
+  }
+
   log("info", `Found ${results.length} news results for: "${query}"`);
+
+  if (CONFIG.search.outputFormat === "json") {
+    return JSON.stringify(results);
+  }
+
+  if (CONFIG.search.outputFormat === "minimal") {
+    return results.map((r) => `${r.title}: ${r.url}`).join("\n");
+  }
 
   // Dense single-line format for token efficiency
   const formattedResults = results
