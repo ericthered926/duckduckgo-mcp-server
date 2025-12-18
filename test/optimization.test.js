@@ -45,7 +45,11 @@ async function sendMessage(server, message, retries = 6) {
 }
 
 describe("Optimization Features", () => {
-  it("should respect limit override (limit=1)", async () => {
+  it("should respect limit override (limit=1)", async (t) => {
+    if (process.env.CI) {
+      t.skip("Skipping live search tests in CI due to rate limiting/IP blocking");
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const server = spawn("node", ["build/index.js"], {
@@ -87,7 +91,11 @@ describe("Optimization Features", () => {
     }
   });
 
-  it("should output JSON format when configured", async () => {
+  it("should output JSON format when configured", async (t) => {
+    if (process.env.CI) {
+      t.skip("Skipping live search tests in CI due to rate limiting/IP blocking");
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const server = spawn("node", ["build/index.js"], {
@@ -127,7 +135,11 @@ describe("Optimization Features", () => {
     }
   });
 
-  it("should output minimal format when configured", async () => {
+  it("should output minimal format when configured", async (t) => {
+    if (process.env.CI) {
+      t.skip("Skipping live search tests in CI due to rate limiting/IP blocking");
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const server = spawn("node", ["build/index.js"], {
