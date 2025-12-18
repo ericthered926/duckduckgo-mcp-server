@@ -18,16 +18,24 @@ We welcome contributions! Please follow these guidelines to keep the codebase se
     - CI checks must pass (lint, build, tests).
     - Code review is required before merging.
 
-## Branch Protection (Recommended)
+## Branch Protection (Rulesets)
 
-To ensure quality, we recommend enabling these **Branch protection rules** in GitHub Settings:
+We recommend using **Rulesets** (the modern way) to protect `main`.
 
-- **Require a pull request before merging**
-  - _Require approvals_: 1
-- **Require status checks to pass before merging**
-  - _Status check_: `lint-test` (from `.github/workflows/ci.yml`)
-- **Require signed commits** (optional but good)
-- **Do not allow bypassing the above settings**
+1.  Go to **Settings** > **Rules** > **Rulesets**.
+2.  Click **New ruleset** > **New branch ruleset**.
+3.  **General**:
+    - Name: `Protect Main`
+    - Enforcement status: **Active**
+4.  **Target branches**:
+    - Click **Add target** > **Include default branch** (`main`).
+5.  **Rules** (check these):
+    - [x] **Restrict deletions**
+    - [x] **Require a pull request**
+      - Required approvals: `1`
+    - [x] **Require status checks to pass**
+      - Click **Add checks** and search for `lint-test` (must have run once in CI to appear).
+6.  Click **Create**.
 
 ## Release Process
 
