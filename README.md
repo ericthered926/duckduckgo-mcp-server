@@ -8,6 +8,7 @@ A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that p
 
 - **Web Search** - Search the web with region-specific and time-filtered results
 - **News Search** - Search recent news articles with source and date information
+- **Token Optimization** - Configurable result limits and snippet truncation for low-VRAM LLMs
 - **SafeSearch** - Content filtering (strict, moderate, off)
 - **Region Support** - Localized results for different countries
 - **Time Filtering** - Filter results by day, week, month, year
@@ -34,13 +35,14 @@ npm run build
 
 Performs a web search using DuckDuckGo.
 
-| Parameter    | Type   | Required | Default    | Description                                       |
-| ------------ | ------ | -------- | ---------- | ------------------------------------------------- |
-| `query`      | string | Yes      | -          | Search query (max 400 characters)                 |
-| `count`      | number | No       | 10         | Number of results (1-20)                          |
-| `safeSearch` | string | No       | "moderate" | Filter: "strict", "moderate", or "off"            |
-| `region`     | string | No       | "wt-wt"    | Region code (e.g., "us-en", "uk-en", "de-de")     |
-| `time`       | string | No       | "all"      | Time range: "day", "week", "month", "year", "all" |
+| Parameter    | Type   | Required | Default         | Description                                       |
+| ------------ | ------ | -------- | --------------- | ------------------------------------------------- |
+| `query`      | string | Yes      | -               | Search query (max 400 characters)                 |
+| `limit`      | number | No       | DDG_MAX_RESULTS | Override default result limit (1-20)              |
+| `count`      | number | No       | DDG_MAX_RESULTS | [Deprecated: use `limit`] Number of results       |
+| `safeSearch` | string | No       | "moderate"      | Filter: "strict", "moderate", or "off"            |
+| `region`     | string | No       | "wt-wt"         | Region code (e.g., "us-en", "uk-en", "de-de")     |
+| `time`       | string | No       | "all"           | Time range: "day", "week", "month", "year", "all" |
 
 **Example:**
 
@@ -57,12 +59,13 @@ Performs a web search using DuckDuckGo.
 
 Search for recent news articles.
 
-| Parameter    | Type   | Required | Default    | Description                                       |
-| ------------ | ------ | -------- | ---------- | ------------------------------------------------- |
-| `query`      | string | Yes      | -          | News search query (max 400 characters)            |
-| `count`      | number | No       | 10         | Number of results (1-20)                          |
-| `safeSearch` | string | No       | "moderate" | Filter: "strict", "moderate", or "off"            |
-| `time`       | string | No       | "all"      | Time range: "day", "week", "month", "year", "all" |
+| Parameter    | Type   | Required | Default         | Description                                       |
+| ------------ | ------ | -------- | --------------- | ------------------------------------------------- |
+| `query`      | string | Yes      | -               | News search query (max 400 characters)            |
+| `limit`      | number | No       | DDG_MAX_RESULTS | Override default result limit (1-20)              |
+| `count`      | number | No       | DDG_MAX_RESULTS | [Deprecated: use `limit`] Number of results       |
+| `safeSearch` | string | No       | "moderate"      | Filter: "strict", "moderate", or "off"            |
+| `time`       | string | No       | "all"           | Time range: "day", "week", "month", "year", "all" |
 
 **Example:**
 
@@ -98,23 +101,38 @@ Other region codes following the `xx-xx` format may also work.
 
 ### Environment Variables
 
-| Variable                | Default | Description                                   |
-| ----------------------- | ------- | --------------------------------------------- |
-| `RATE_LIMIT_PER_SECOND` | 1       | Maximum requests per second                   |
-| `RATE_LIMIT_PER_MONTH`  | 15000   | Maximum requests per month                    |
-| `LOG_LEVEL`             | "info"  | Logging level: debug, info, warn, error, none |
+#### Token Optimization (for low-VRAM LLMs)
+
+| Variable                  | Default | Description                                     |
+| ------------------------- | ------- | ----------------------------------------------- |
+| `DDG_MAX_RESULTS`         | 3       | Default number of results returned              |
+| `DDG_MAX_SNIPPET_LENGTH`  | 150     | Max characters per snippet (truncated with ...) |
+| `DDG_ENABLE_FULL_CONTENT` | false   | Set to "true" to disable truncation             |
+
+#### Rate Limiting
+
+| Variable                | Default | Description                 |
+| ----------------------- | ------- | --------------------------- |
+| `RATE_LIMIT_PER_SECOND` | 1       | Maximum requests per second |
+| `RATE_LIMIT_PER_MONTH`  | 15000   | Maximum requests per month  |
+
+#### Logging
+
+| Variable    | Default | Description                                   |
+| ----------- | ------- | --------------------------------------------- |
+| `LOG_LEVEL` | "info"  | Logging level: debug, info, warn, error, none |
 
 ### Examples
 
 ```bash
-# Run with debug logging
+# Token-optimized for low VRAM (12GB RTX 5070)
+DDG_MAX_RESULTS=3 DDG_MAX_SNIPPET_LENGTH=150 npm run start
+
+# Full content for high-VRAM systems
+DDG_MAX_RESULTS=10 DDG_MAX_SNIPPET_LENGTH=500 DDG_ENABLE_FULL_CONTENT=true npm run start
+
+# Debug logging
 LOG_LEVEL=debug npm run start
-
-# Run with custom rate limits
-RATE_LIMIT_PER_SECOND=2 RATE_LIMIT_PER_MONTH=30000 npm run start
-
-# Production (minimal logging)
-LOG_LEVEL=error npm run start
 ```
 
 ## Integration
@@ -145,11 +163,12 @@ For [MCPO](https://github.com/open-webui/mcpo) integration:
 {
   "mcpServers": {
     "duckduckgo": {
-      "command": "node",
-      "args": ["/path/to/duckduckgo-mcp-server/build/index.js"],
+      "command": "npx",
+      "args": ["-y", "@ericthered926/duckduckgo-mcp-server"],
       "env": {
-        "LOG_LEVEL": "info",
-        "RATE_LIMIT_PER_SECOND": "1"
+        "DDG_MAX_RESULTS": "3",
+        "DDG_MAX_SNIPPET_LENGTH": "150",
+        "DDG_ENABLE_FULL_CONTENT": "false"
       }
     }
   }
@@ -254,6 +273,10 @@ This project is a fork of [zhsama/duckduckgo-mcp-server](https://github.com/zhsa
 
 ### What's New in This Fork
 
+- **Token optimization** - Configurable result limits & snippet truncation for low-VRAM LLMs
+- **Dense output format** - Single-line results to minimize token usage
+- **URL cleaning** - Strips tracking params (utm\_\*, fbclid, gclid, etc.)
+- **`limit` parameter** - LLM can override defaults when more context needed
 - English localization (all comments and output)
 - News search tool (`duckduckgo_news_search`)
 - Region/locale support for localized results

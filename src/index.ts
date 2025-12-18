@@ -3,6 +3,22 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import * as DDG from "duck-duck-scrape";
+import { z } from "zod";
+
+// ============================================================================
+// Environment Configuration (Zod Schema)
+// ============================================================================
+
+const EnvConfigSchema = z.object({
+  DDG_MAX_RESULTS: z.coerce.number().min(1).max(20).default(3),
+  DDG_MAX_SNIPPET_LENGTH: z.coerce.number().min(50).max(500).default(150),
+  DDG_ENABLE_FULL_CONTENT: z.preprocess(
+    (v) => v === "true" || v === "1",
+    z.boolean().default(false)
+  ),
+});
+
+const envConfig = EnvConfigSchema.parse(process.env);
 
 // ============================================================================
 // Type Definitions
@@ -11,6 +27,7 @@ import * as DDG from "duck-duck-scrape";
 interface WebSearchArgs {
   query: string;
   count?: number;
+  limit?: number;
   safeSearch?: "strict" | "moderate" | "off";
   region?: string;
   time?: "day" | "week" | "month" | "year" | "all";
@@ -19,6 +36,7 @@ interface WebSearchArgs {
 interface NewsSearchArgs {
   query: string;
   count?: number;
+  limit?: number;
   safeSearch?: "strict" | "moderate" | "off";
   time?: "day" | "week" | "month" | "year" | "all";
 }
@@ -77,7 +95,9 @@ const CONFIG = {
   search: {
     maxQueryLength: 400,
     maxResults: 20,
-    defaultResults: 10,
+    defaultResults: envConfig.DDG_MAX_RESULTS,
+    maxSnippetLength: envConfig.DDG_MAX_SNIPPET_LENGTH,
+    enableFullContent: envConfig.DDG_ENABLE_FULL_CONTENT,
     defaultSafeSearch: "moderate" as const,
     defaultRegion: "wt-wt", // Worldwide
   },
@@ -122,29 +142,69 @@ const VALID_REGIONS = [
 ];
 
 // ============================================================================
-// Tool Definitions
+// Token Pruning Helpers
+// ============================================================================
+
+/**
+ * Truncates text to maxLen, adding ellipsis if truncated.
+ */
+function truncateSnippet(text: string, maxLen: number): string {
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen - 3) + "...";
+}
+
+/**
+ * Cleans URL by removing common tracking parameters.
+ */
+function cleanUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    const trackingParams = [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_term",
+      "utm_content",
+      "fbclid",
+      "gclid",
+      "msclkid",
+      "ref",
+    ];
+    trackingParams.forEach((p) => u.searchParams.delete(p));
+    return u.toString();
+  } catch {
+    return url; // Return original if parsing fails
+  }
+}
+
+// ============================================================================
+// Tool Definitions (Dynamic based on config)
 // ============================================================================
 
 const WEB_SEARCH_TOOL = {
   name: "duckduckgo_web_search",
   description:
-    "Performs a web search using DuckDuckGo. Returns organic search results with titles, descriptions, and URLs. " +
-    "Ideal for general queries, finding information, articles, and websites. " +
-    "Supports region-specific results and time filtering.",
+    `Web search via DuckDuckGo. Returns max ${CONFIG.search.defaultResults} results with ${CONFIG.search.maxSnippetLength}-char snippets. ` +
+    `Use 'limit' param to override (1-${CONFIG.search.maxResults}). Supports region/time filters.`,
   inputSchema: {
     type: "object" as const,
     properties: {
       query: {
         type: "string",
-        description: `Search query (max ${CONFIG.search.maxQueryLength} characters)`,
+        description: `Search query (max ${CONFIG.search.maxQueryLength} chars)`,
         maxLength: CONFIG.search.maxQueryLength,
+      },
+      limit: {
+        type: "number",
+        description: `Override default result limit (1-${CONFIG.search.maxResults}, default: ${CONFIG.search.defaultResults})`,
+        minimum: 1,
+        maximum: CONFIG.search.maxResults,
       },
       count: {
         type: "number",
-        description: `Number of results (1-${CONFIG.search.maxResults}, default: ${CONFIG.search.defaultResults})`,
+        description: `[DEPRECATED: use 'limit'] Number of results`,
         minimum: 1,
         maximum: CONFIG.search.maxResults,
-        default: CONFIG.search.defaultResults,
       },
       safeSearch: {
         type: "string",
@@ -155,7 +215,7 @@ const WEB_SEARCH_TOOL = {
       region: {
         type: "string",
         description:
-          "Region for localized results. Examples: 'us-en' (US), 'uk-en' (UK), 'de-de' (Germany), 'fr-fr' (France), 'wt-wt' (worldwide, default)",
+          "Region for localized results. Examples: 'us-en' (US), 'uk-en' (UK), 'de-de' (Germany), 'wt-wt' (worldwide, default)",
         default: "wt-wt",
       },
       time: {
@@ -172,22 +232,27 @@ const WEB_SEARCH_TOOL = {
 const NEWS_SEARCH_TOOL = {
   name: "duckduckgo_news_search",
   description:
-    "Search for recent news articles using DuckDuckGo News. Returns news results with titles, excerpts, sources, and publication dates. " +
-    "Best for current events, breaking news, and recent developments on any topic.",
+    `News search via DuckDuckGo. Returns max ${CONFIG.search.defaultResults} articles with ${CONFIG.search.maxSnippetLength}-char excerpts. ` +
+    `Use 'limit' param to override (1-${CONFIG.search.maxResults}).`,
   inputSchema: {
     type: "object" as const,
     properties: {
       query: {
         type: "string",
-        description: `News search query (max ${CONFIG.search.maxQueryLength} characters)`,
+        description: `News search query (max ${CONFIG.search.maxQueryLength} chars)`,
         maxLength: CONFIG.search.maxQueryLength,
+      },
+      limit: {
+        type: "number",
+        description: `Override default result limit (1-${CONFIG.search.maxResults}, default: ${CONFIG.search.defaultResults})`,
+        minimum: 1,
+        maximum: CONFIG.search.maxResults,
       },
       count: {
         type: "number",
-        description: `Number of results (1-${CONFIG.search.maxResults}, default: ${CONFIG.search.defaultResults})`,
+        description: `[DEPRECATED: use 'limit'] Number of results`,
         minimum: 1,
         maximum: CONFIG.search.maxResults,
-        default: CONFIG.search.defaultResults,
       },
       safeSearch: {
         type: "string",
@@ -301,6 +366,13 @@ function isValidCount(count: unknown): count is number {
   );
 }
 
+function isValidLimit(limit: unknown): limit is number {
+  return (
+    limit === undefined ||
+    (typeof limit === "number" && limit >= 1 && limit <= CONFIG.search.maxResults)
+  );
+}
+
 function isValidSafeSearch(safeSearch: unknown): safeSearch is "strict" | "moderate" | "off" {
   return safeSearch === undefined || ["strict", "moderate", "off"].includes(safeSearch as string);
 }
@@ -318,10 +390,11 @@ function isValidRegion(region: unknown): region is string {
 
 function isWebSearchArgs(args: unknown): args is WebSearchArgs {
   if (typeof args !== "object" || args === null) return false;
-  const { query, count, safeSearch, region, time } = args as Record<string, unknown>;
+  const { query, count, limit, safeSearch, region, time } = args as Record<string, unknown>;
   return (
     isValidQuery(query) &&
     isValidCount(count) &&
+    isValidLimit(limit) &&
     isValidSafeSearch(safeSearch) &&
     isValidRegion(region) &&
     isValidTime(time)
@@ -330,9 +403,13 @@ function isWebSearchArgs(args: unknown): args is WebSearchArgs {
 
 function isNewsSearchArgs(args: unknown): args is NewsSearchArgs {
   if (typeof args !== "object" || args === null) return false;
-  const { query, count, safeSearch, time } = args as Record<string, unknown>;
+  const { query, count, limit, safeSearch, time } = args as Record<string, unknown>;
   return (
-    isValidQuery(query) && isValidCount(count) && isValidSafeSearch(safeSearch) && isValidTime(time)
+    isValidQuery(query) &&
+    isValidCount(count) &&
+    isValidLimit(limit) &&
+    isValidSafeSearch(safeSearch) &&
+    isValidTime(time)
   );
 }
 
@@ -377,13 +454,17 @@ function formatDate(timestamp: number): string {
 async function performWebSearch(args: WebSearchArgs): Promise<string> {
   const {
     query,
-    count = CONFIG.search.defaultResults,
+    limit,
+    count,
     safeSearch = CONFIG.search.defaultSafeSearch,
     region = CONFIG.search.defaultRegion,
     time = "all",
   } = args;
 
-  log("info", `Web search: "${query}"`, { count, safeSearch, region, time });
+  // limit takes precedence over count, both override defaultResults
+  const effectiveLimit = limit ?? count ?? CONFIG.search.defaultResults;
+
+  log("info", `Web search: "${query}"`, { effectiveLimit, safeSearch, region, time });
 
   checkRateLimit();
 
@@ -396,43 +477,35 @@ async function performWebSearch(args: WebSearchArgs): Promise<string> {
 
   if (searchResults.noResults) {
     log("info", `No results for: "${query}"`);
-    return `# DuckDuckGo Web Search\n\n**Query:** "${query}"\n\nNo results found.`;
+    return `No results for "${query}"`;
   }
 
-  const results: WebSearchResult[] = searchResults.results.slice(0, count).map((r) => ({
+  const results: WebSearchResult[] = searchResults.results.slice(0, effectiveLimit).map((r) => ({
     title: r.title,
-    description: r.description || r.title,
-    url: r.url,
+    description: CONFIG.search.enableFullContent
+      ? r.description || r.title
+      : truncateSnippet(r.description || r.title, CONFIG.search.maxSnippetLength),
+    url: cleanUrl(r.url),
     hostname: r.hostname,
   }));
 
   log("info", `Found ${results.length} web results for: "${query}"`);
 
+  // Dense single-line format for token efficiency
   const formattedResults = results
-    .map((r, i) => `### ${i + 1}. ${r.title}\n\n${r.description}\n\n🔗 [${r.hostname}](${r.url})`)
-    .join("\n\n---\n\n");
+    .map((r, i) => `[${i + 1}] ${r.title} | ${r.description} | ${r.hostname} ${r.url}`)
+    .join("\n");
 
-  return `# DuckDuckGo Web Search
-
-**Query:** "${query}"  
-**Region:** ${region}  
-**Results:** ${results.length}
-
----
-
-${formattedResults}
-`;
+  return `Web:"${query}" (${results.length}/${effectiveLimit})\n${formattedResults}`;
 }
 
 async function performNewsSearch(args: NewsSearchArgs): Promise<string> {
-  const {
-    query,
-    count = CONFIG.search.defaultResults,
-    safeSearch = CONFIG.search.defaultSafeSearch,
-    time = "all",
-  } = args;
+  const { query, limit, count, safeSearch = CONFIG.search.defaultSafeSearch, time = "all" } = args;
 
-  log("info", `News search: "${query}"`, { count, safeSearch, time });
+  // limit takes precedence over count, both override defaultResults
+  const effectiveLimit = limit ?? count ?? CONFIG.search.defaultResults;
+
+  log("info", `News search: "${query}"`, { effectiveLimit, safeSearch, time });
 
   checkRateLimit();
 
@@ -444,13 +517,15 @@ async function performNewsSearch(args: NewsSearchArgs): Promise<string> {
 
   if (searchResults.noResults) {
     log("info", `No news results for: "${query}"`);
-    return `# DuckDuckGo News Search\n\n**Query:** "${query}"\n\nNo news articles found.`;
+    return `No news for "${query}"`;
   }
 
-  const results: NewsSearchResult[] = searchResults.results.slice(0, count).map((r) => ({
+  const results: NewsSearchResult[] = searchResults.results.slice(0, effectiveLimit).map((r) => ({
     title: r.title,
-    excerpt: r.excerpt,
-    url: r.url,
+    excerpt: CONFIG.search.enableFullContent
+      ? r.excerpt
+      : truncateSnippet(r.excerpt, CONFIG.search.maxSnippetLength),
+    url: cleanUrl(r.url),
     source: r.syndicate,
     date: formatDate(r.date),
     relativeTime: r.relativeTime,
@@ -458,23 +533,12 @@ async function performNewsSearch(args: NewsSearchArgs): Promise<string> {
 
   log("info", `Found ${results.length} news results for: "${query}"`);
 
+  // Dense single-line format for token efficiency
   const formattedResults = results
-    .map(
-      (r, i) =>
-        `### ${i + 1}. ${r.title}\n\n${r.excerpt}\n\n📰 **Source:** ${r.source} • ${r.relativeTime}\n\n🔗 [Read article](${r.url})`
-    )
-    .join("\n\n---\n\n");
+    .map((r, i) => `[${i + 1}] ${r.title} | ${r.excerpt} | ${r.source} ${r.relativeTime} ${r.url}`)
+    .join("\n");
 
-  return `# DuckDuckGo News Search
-
-**Query:** "${query}"  
-**Time Range:** ${time === "all" ? "All time" : `Past ${time}`}  
-**Results:** ${results.length}
-
----
-
-${formattedResults}
-`;
+  return `News:"${query}" (${results.length}/${effectiveLimit})\n${formattedResults}`;
 }
 
 // ============================================================================
@@ -544,6 +608,10 @@ async function runServer(): Promise<void> {
     log(
       "info",
       `Rate limits: ${CONFIG.rateLimit.perSecond}/sec, ${CONFIG.rateLimit.perMonth}/month`
+    );
+    log(
+      "info",
+      `Token config: max_results=${CONFIG.search.defaultResults}, snippet_len=${CONFIG.search.maxSnippetLength}, full_content=${CONFIG.search.enableFullContent}`
     );
     log("info", `Log level: ${CONFIG.logging.level}`);
   } catch (error) {
