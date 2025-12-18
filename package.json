@@ -1,6 +1,6 @@
 {
   "name": "@ericthered926/duckduckgo-mcp-server",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "A Model Context Protocol (MCP) server for DuckDuckGo web and news search",
   "type": "module",
   "main": "build/index.js",
