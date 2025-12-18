@@ -1,107 +1,270 @@
-# duckduckgo-search MCP Server
+# DuckDuckGo MCP Server
 
-English | [中文](README_zh.md)
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that provides DuckDuckGo search functionality for AI assistants.
 
-A Model Context Protocol server for DuckDuckGo Search
-
-This is a TypeScript-based MCP server that provides DuckDuckGo search functionality. It demonstrates core MCP concepts through:
-
-- Integration with DuckDuckGo Search
-- Easy-to-use search tool interface
-- Rate limiting and error handling support
-
-<a href="https://glama.ai/mcp/servers/34fhy9xb9w">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/34fhy9xb9w/badge" alt="DuckDuckGo Server MCP server" />
-</a>
+> **Attribution**: This project is a fork of [zhsama/duckduckgo-mcp-server](https://github.com/zhsama/duckduckgo-mcp-server), originally created by [zhsama](https://github.com/zhsama). This fork adds English localization, news search, region support, time filtering, and modern tooling.
 
 ## Features
 
-### Search Tool
+- **Web Search** - Search the web with region-specific and time-filtered results
+- **News Search** - Search recent news articles with source and date information
+- **SafeSearch** - Content filtering (strict, moderate, off)
+- **Region Support** - Localized results for different countries
+- **Time Filtering** - Filter results by day, week, month, year
+- **Rate Limiting** - Configurable rate limits to prevent abuse
+- **Configurable Logging** - Debug, info, warn, error, or none
 
-- `duckduckgo_search` - Perform web searches using DuckDuckGo API
-  - Required parameter: `query` (search query, max 400 characters)
-  - Optional parameter: `count` (number of results, 1-20, default 10)
-  - Optional parameter: `safeSearch` (safety level: strict/moderate/off, default moderate)
-  - Returns formatted Markdown search results
-
-### Rate Limits
-
-- Maximum 1 request per second
-- Maximum 15000 requests per month
-
-## Development
+## Installation
 
 ### Prerequisites
 
-- Node.js >= 18
-- pnpm >= 8.0.0
+- Node.js >= 18.0.0 (tested with Node 24)
+- npm
 
-### Installation
-
-```bash
-# Install pnpm if not already installed
-npm install -g pnpm
-
-# Install project dependencies
-pnpm install
-```
-
-### Build and Run
-
-Build the server:
+### Install & Build
 
 ```bash
-pnpm run build
+npm install
+npm run build
 ```
 
-For development with auto-rebuild:
+## Available Tools
 
-```bash
-pnpm run watch
-```
+### `duckduckgo_web_search`
 
-## Setup in Claude Desktop
+Performs a web search using DuckDuckGo.
 
-To use with Claude Desktop, add the server config:
+| Parameter    | Type   | Required | Default    | Description                                       |
+| ------------ | ------ | -------- | ---------- | ------------------------------------------------- |
+| `query`      | string | Yes      | -          | Search query (max 400 characters)                 |
+| `count`      | number | No       | 10         | Number of results (1-20)                          |
+| `safeSearch` | string | No       | "moderate" | Filter: "strict", "moderate", or "off"            |
+| `region`     | string | No       | "wt-wt"    | Region code (e.g., "us-en", "uk-en", "de-de")     |
+| `time`       | string | No       | "all"      | Time range: "day", "week", "month", "year", "all" |
 
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
+**Example:**
 
 ```json
-# online
 {
-  "mcpServers": {
-    "duckduckgo-search": {
-        "command": "npx",
-        "args": [
-          "-y",
-          "duckduckgo-mcp-server"
-        ]
-    }
-  }
+  "query": "TypeScript best practices",
+  "count": 5,
+  "region": "us-en",
+  "time": "month"
 }
+```
 
-# local
+### `duckduckgo_news_search`
+
+Search for recent news articles.
+
+| Parameter    | Type   | Required | Default    | Description                                       |
+| ------------ | ------ | -------- | ---------- | ------------------------------------------------- |
+| `query`      | string | Yes      | -          | News search query (max 400 characters)            |
+| `count`      | number | No       | 10         | Number of results (1-20)                          |
+| `safeSearch` | string | No       | "moderate" | Filter: "strict", "moderate", or "off"            |
+| `time`       | string | No       | "all"      | Time range: "day", "week", "month", "year", "all" |
+
+**Example:**
+
+```json
+{
+  "query": "artificial intelligence",
+  "count": 10,
+  "time": "week"
+}
+```
+
+## Supported Regions
+
+| Code    | Region           |
+| ------- | ---------------- |
+| `wt-wt` | Worldwide        |
+| `us-en` | United States    |
+| `uk-en` | United Kingdom   |
+| `ca-en` | Canada (English) |
+| `au-en` | Australia        |
+| `de-de` | Germany          |
+| `fr-fr` | France           |
+| `es-es` | Spain            |
+| `it-it` | Italy            |
+| `jp-jp` | Japan            |
+| `br-pt` | Brazil           |
+| `mx-es` | Mexico           |
+| `in-en` | India            |
+
+Other region codes following the `xx-xx` format may also work.
+
+## Configuration
+
+### Environment Variables
+
+| Variable                | Default | Description                                   |
+| ----------------------- | ------- | --------------------------------------------- |
+| `RATE_LIMIT_PER_SECOND` | 1       | Maximum requests per second                   |
+| `RATE_LIMIT_PER_MONTH`  | 15000   | Maximum requests per month                    |
+| `LOG_LEVEL`             | "info"  | Logging level: debug, info, warn, error, none |
+
+### Examples
+
+```bash
+# Run with debug logging
+LOG_LEVEL=debug npm run start
+
+# Run with custom rate limits
+RATE_LIMIT_PER_SECOND=2 RATE_LIMIT_PER_MONTH=30000 npm run start
+
+# Production (minimal logging)
+LOG_LEVEL=error npm run start
+```
+
+## Integration
+
+### Claude Desktop
+
+Add to your Claude Desktop config:
+
+**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`  
+**Windows:** `%APPDATA%/Claude/claude_desktop_config.json`
+
+```json
 {
   "mcpServers": {
-    "duckduckgo-search": {
-      "command": "node",
-      "args": [
-        "/path/to/duckduckgo-search/build/index.js"
-      ]
+    "duckduckgo": {
+      "command": "npx",
+      "args": ["-y", "@ericthered926/duckduckgo-mcp-server"]
     }
   }
 }
 ```
-![image](https://github.com/user-attachments/assets/6906e280-9dbb-4bb5-a537-d9e45e666084)
-![image](https://github.com/user-attachments/assets/867a70ae-082f-45ab-a623-869bfd6c31eb)
+
+### MCPO (Open WebUI)
+
+For [MCPO](https://github.com/open-webui/mcpo) integration:
+
+```json
+{
+  "mcpServers": {
+    "duckduckgo": {
+      "command": "node",
+      "args": ["/path/to/duckduckgo-mcp-server/build/index.js"],
+      "env": {
+        "LOG_LEVEL": "info",
+        "RATE_LIMIT_PER_SECOND": "1"
+      }
+    }
+  }
+}
+```
+
+### Local Development
+
+```json
+{
+  "mcpServers": {
+    "duckduckgo": {
+      "command": "node",
+      "args": ["/path/to/duckduckgo-mcp-server/build/index.js"],
+      "env": {
+        "LOG_LEVEL": "debug"
+      }
+    }
+  }
+}
+```
+
+## Development
+
+### Scripts
+
+| Command             | Description                   |
+| ------------------- | ----------------------------- |
+| `npm run build`     | Compile TypeScript            |
+| `npm run start`     | Run the server                |
+| `npm run dev`       | Watch mode for development    |
+| `npm run lint`      | Run ESLint + Prettier check   |
+| `npm run lint:fix`  | Auto-fix lint issues          |
+| `npm run format`    | Format code with Prettier     |
+| `npm run test`      | Run tests                     |
+| `npm run typecheck` | TypeScript type checking only |
 
 ### Debugging
 
-Since MCP servers communicate over stdio, debugging can be challenging. We recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector), which is available as a package script:
+Use the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```bash
-pnpm run inspector
+npx @modelcontextprotocol/inspector node build/index.js
 ```
 
-The Inspector will provide a URL to access debugging tools in your browser.
+### Project Structure
+
+```
+duckduckgo-mcp-server/
+├── src/
+│   └── index.ts          # Main server (web + news search)
+├── test/
+│   └── server.test.js    # Smoke tests
+├── build/                 # Compiled output
+├── .husky/               # Pre-commit hooks
+├── eslint.config.js      # ESLint 9.x flat config
+├── tsconfig.json         # Strict TypeScript config
+├── .prettierrc           # Prettier formatting
+├── .editorconfig         # Editor settings
+└── .nvmrc                # Node version (24)
+```
+
+## Rate Limits
+
+Default rate limits are conservative to avoid being blocked by DuckDuckGo:
+
+- **1 request per second** - Prevents rate limiting
+- **15,000 requests per month** - Reasonable monthly cap
+
+Adjust via environment variables if needed for your use case.
+
+## Troubleshooting
+
+### Server won't start
+
+1. Check Node.js version: `node --version` (should be >= 18)
+2. Rebuild: `npm run build`
+3. Check for TypeScript errors in build output
+
+### Rate limit errors
+
+- Wait for the limit window to reset (1 second for per-second, or adjust limits)
+- Check if multiple instances are sharing the same counter
+
+### No results returned
+
+- Try a different query or remove time filters
+- Check if SafeSearch is blocking results
+- DuckDuckGo may return no results for very specific queries
+
+### Debug logging
+
+Enable debug logs to see detailed request information:
+
+```bash
+LOG_LEVEL=debug npm run start
+```
+
+## Credits
+
+This project is a fork of [zhsama/duckduckgo-mcp-server](https://github.com/zhsama/duckduckgo-mcp-server), originally created by [zhsama](https://github.com/zhsama).
+
+### What's New in This Fork
+
+- English localization (all comments and output)
+- News search tool (`duckduckgo_news_search`)
+- Region/locale support for localized results
+- Time range filtering
+- Configurable logging via `LOG_LEVEL`
+- Modern ESLint 9.x flat config
+- Prettier formatting
+- Husky pre-commit hooks
+- Comprehensive test suite
+- Strict TypeScript configuration
+
+## License
+
+MIT - See [LICENSE](LICENSE) for details.
